@@ -325,3 +325,12 @@ class DatabaseTools:
             return []
 
         return [dict(row) for row in content]
+
+
+
+
+def main() -> None:
+    pass
+
+if __name__ == "__main__":
+    main()
