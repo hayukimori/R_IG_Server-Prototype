@@ -122,9 +122,10 @@ class Tools():
                 random.uniform(*chunk.y_range),
                 random.uniform(*chunk.z_range)
             )
-        
-        if verify_distance(new_position, other_cubes, min_distance):
-            return new_position
+            
+            if self.verify_distance(new_position, other_cubes, min_distance):
+                return new_position
+            
 
 class HashTools():
     def __init__(self) -> None:
@@ -358,6 +359,7 @@ def main() -> None:
         users: list[RandomUser] = RandomUser.generate_users(10000) 
         for user in users:
             try:
+                print(f"Trying to create user: {user.get_username()}")
                 content: dict | None = db.newUser(
                     username=user.get_username(),
                     email=user.get_email(),
@@ -373,6 +375,7 @@ def main() -> None:
     except Exception as e:
         print(f"Unhandled error: {e=}")
             
+    db.conn.commit()
 
 if __name__ == "__main__":
     main()
