@@ -26,6 +26,8 @@ from randomuser import RandomUser
 from icecream import ic
 
 
+DBPATH: str = "main.db"
+
 CHUNK_SIZE = 32
 CHUNKS_PER_AXIS = 8
 SPACEMENT = CHUNK_SIZE
@@ -199,7 +201,7 @@ class DatabaseTools:
         """
         cmd: str = (
             "INSERT INTO user"
-            "(id, username, email, passowrd_hash)"
+            "(id, username, email, password_hash)"
             "VALUES (?, ?, ?, ?)"
         )
         
@@ -280,8 +282,8 @@ class DatabaseTools:
         """
         cmd: str = (
             "SELECT position_x, position_y, position_z FROM CUBE WHERE "
-            "position_x BETWEEN ? AND ? AND"
-            "position_y BETWEEN ? AND ? AND"
+            "position_x BETWEEN ? AND ? AND "
+            "position_y BETWEEN ? AND ? AND "
             "position_z BETWEEN ? AND ? "
         )
         
@@ -330,7 +332,47 @@ class DatabaseTools:
 
 
 def main() -> None:
-    pass
+    tools: Tools = Tools()
+    hash_tools: HashTools = HashTools()
+
+    
+    # => Chunk Related
+    # Generate chunk centers
+    chunk_centers = list(product(
+        tools.generate_chunk_centers(CHUNKS_PER_AXIS, CHUNK_SIZE),
+        repeat=3
+    ))
+    chunks: list[Chunk] = [Chunk(center, CHUNK_SIZE) for center in chunk_centers]
+    
+    
+    # => Database Related
+    db: DatabaseTools = DatabaseTools(
+        DBPATH, 
+        chunks=chunks, 
+        tools=tools, 
+        hash_tools=hash_tools
+    )
+    
+    # Testing with 10.0000 fake users ~ (unique table columns may break this line.)
+    try:
+        users: list[RandomUser] = RandomUser.generate_users(10000) 
+        for user in users:
+            try:
+                content: dict | None = db.newUser(
+                    username=user.get_username(),
+                    email=user.get_email(),
+                    raw_password=user.get_password()
+                )
+                
+                if content == None:
+                    print(f"Couldn't create user: {user.get_username()}")    
+                    
+            except RandomUser.APIError as e:
+                print(f"Error generating users: {e=}")
+
+    except Exception as e:
+        print(f"Unhandled error: {e=}")
+            
 
 if __name__ == "__main__":
     main()
