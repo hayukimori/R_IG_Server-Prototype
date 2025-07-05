@@ -4,6 +4,7 @@ from enum import verify
 import itertools
 import json
 import math
+from os import error
 import random
 
 # Database
@@ -40,6 +41,13 @@ class Chunk:
         self.z_range = (center[2] - half, center[2] + half)
 
 
+class Vector3:
+    def __init__(self, entry_tuple: tuple[float, float, float]):
+        self.raw_tuple: tuple[float, float, float] = entry_tuple
+        
+        self.x = entry_tuple[0]
+        self.y = entry_tuple[1]
+        self.z = entry_tuple[2]
 
 class Tools():
     def __init__(self):
@@ -145,3 +153,175 @@ class HashTools():
         salt_password = password + salt
         hash_result = hashlib.sha256(salt_password.encode()).hexdigest()
         return hash_result
+
+
+class DatabaseTools:
+    def __init__(self, dbpath: str, chunks: list[Chunk], tools: Tools, hash_tools: HashTools) -> None:
+        self.conn: sqlite3.Connection = sqlite3.connect(dbpath)
+        self.conn.row_factory = sqlite3.Row
+        self.cursor = self.conn.cursor()
+        self.chunks = chunks
+        self.tools = tools
+        self.hash_tools = hash_tools
+    
+    def storeSaltHash(self, user_id: str, salt: str) -> None:
+        """ Stores the salt for a user in the database.
+
+        Args:
+            user_id (str): Current user id
+            salt (str): Current user salt to be stored
+        """
+        cmd: str = (
+            "INSERT INTO salt(user_id, salt) " 
+            "VALUES "
+            "(?, ?)"
+        )
+        
+        try:
+            self.cursor.execute(cmd, (user_id, salt))
+            
+        except sqlite3.IntegrityError as e:
+            print(f"Sqlite3 integrity error: {e=}")
+
+        except sqlite3.Error as e:
+            print(f"Sqlite3 error: {e=}")
+
+    def newUser(self, username: str, email: str, raw_password: str) -> dict | None:
+        """ Creates a new user in the database.
+
+        Args:
+            username (str): user name
+            email (str): user email
+            raw_password (str): user string password
+
+        Returns:
+            dict | None: Returns the created user as a dictionary or None if an error occurs.
+        """
+        cmd: str = (
+            "INSERT INTO user"
+            "(id, username, email, passowrd_hash)"
+            "VALUES (?, ?, ?, ?)"
+        )
+        
+        user_id: str = uuid.uuid4().__str__()
+        salt: str = self.hash_tools.gen_salt()
+        password_hash = self.hash_tools.hash_password(
+            password=raw_password,
+            salt=salt
+        )
+        
+        data = (user_id, username, email, password_hash)
+        try:
+            self.cursor.execute(cmd, data)
+            self.storeSaltHash(user_id=user_id, salt=salt)
+            
+            user_created: dict = self.getUserById(user_id)
+            
+            if "error" in user_created.keys():
+                return user_created
+            else:
+                self.newCube(user_created["id"])
+                return user_created
+            
+        except sqlite3.IntegrityError as e:
+            print(f"Sqlite integrity error: {e=}")
+        except sqlite3.Error as e:
+            print(f"Sqlite error: {e=}")
+        except Exception as e:
+            print(f"Unhandled error: {e=}")
+
+    def newCube(self, user_id: str) -> None:
+        """ Creates a new cube for a user in the database.
+
+        Args:
+            user_id (str): User id to create the cube for
+        """
+        cmd: str = (
+            "INSERT INTO cube"
+            "(id, owner_id, position_x, position_y, position_z, size) "
+            "VALUES"
+            "(?, ?, ?, ?, ?, ?)"
+        )
+        
+        cube_id: str = uuid.uuid4().__str__()
+        random_chunk: Chunk = random.choice(self.chunks)
+        chunk_cubes: list[tuple[float, float, float]] = self.getChunkCubesXYZ(random_chunk)
+        new_position: tuple[float, float, float] = self.tools.gen_random_position(
+            other_cubes=chunk_cubes,
+            min_distance=5,
+            chunk=random_chunk
+        )
+        npv3: Vector3 = Vector3(new_position)
+        data: tuple = (
+            cube_id, user_id, 
+            npv3.x, npv3.y, npv3.z
+        )
+        
+        try:
+            self.cursor.execute(cmd, data)
+        except sqlite3.IntegrityError as e:
+            print(f"Sqlite integrity error: {e=}")
+        except sqlite3.Error as e:
+            print(f"Sqlite error: {e=}")
+    
+    def getSaltHashes(self) -> list[dict]:
+        """ Retrieves all salt hashes from the database."""
+        self.cursor.execute("SELECT * FROM salt")
+        return self.result_as_ldisct(self.cursor.fetchall())
+    
+    def getChunkCubesXYZ(self, chunk: Chunk) -> list[tuple[float, float, float]]:
+        """ Retrieves all cubes' positions within a specified chunk.
+
+        Args:
+            chunk (Chunk): The chunk to retrieve cubes from, containing its center and size.
+
+        Returns:
+            list[tuple[float, float, float]]: A list of tuples representing the positions of cubes within the specified chunk.
+        """
+        cmd: str = (
+            "SELECT position_x, position_y, position_z FROM CUBE WHERE "
+            "position_x BETWEEN ? AND ? AND"
+            "position_y BETWEEN ? AND ? AND"
+            "position_z BETWEEN ? AND ? "
+        )
+        
+        self.cursor.execute(cmd, (
+            *chunk.x_range,
+            *chunk.y_range,
+            *chunk.z_range,
+        ))
+        
+        return self.cursor.fetchall()
+
+    def getUserById(self, user_id: str) -> dict:
+        """ Retrieves a user by their ID from the database.
+
+        Args:
+            user_id (str): The ID of the user to retrieve.
+
+        Returns:
+            dict: A dictionary representing the user if found, or an error message if not found.
+        """
+        cmd: str = "SELECT * FROM USER WHERE id = ?"
+        results: list = self.cursor.execute(cmd, (user_id, )).fetchall()
+        
+        errormsg = {"error": "User not found"}
+        user: dict = self.result_as_ldisct(results)[0] if len(results) > 0 else errormsg
+        
+        return user
+    
+    def getUsers(self) -> list[dict]:
+        """ Retrieves all users from the database.
+
+        Returns:
+            list[dict]: A list of dictionaries representing all users in the database.
+        """
+        self.cursor.execute("SELECT * FROM user")
+        return self.result_as_ldisct(self.cursor.fetchall())
+    
+    def result_as_ldisct(self, content: list[Any]) -> list[dict]:
+        """ Converts a list of sqlite3.Row objects to a list of dictionaries."""
+        if not content:
+            return []
+
+        return [dict(row) for row in content]
