@@ -243,7 +243,7 @@ class DatabaseTools:
             "INSERT INTO cube"
             "(id, owner_id, position_x, position_y, position_z, size) "
             "VALUES"
-            "(?, ?, ?, ?, ?, ?)"
+            "(?, ?, ?, ?, ?)"
         )
         
         cube_id: str = uuid.uuid4().__str__()
