@@ -5,12 +5,17 @@ from sqlalchemy.dialects.sqlite import BLOB
 
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///main.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///./main.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db: SQLAlchemy = SQLAlchemy(app)
 
+class UserProfile(db.Model):
+    __tablename__ = "user_profile"
+    user_id = db.Column(db.String(36), primary_key=True)
 
 class Cube(db.Model):
+    __tablename__ = "cube"
+    
     id = db.Column(
         db.String(36),
         primary_key=True,
