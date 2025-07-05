@@ -2,7 +2,7 @@
 
 -- User table (login) id: UUID4 (str)
 CREATE TABLE IF NOT EXISTS user(
-    id SERIAL PRIMARY KEY,
+    id TEXT PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS user_profile(
 
 -- Cube table (UUID and cube world position)
 CREATE TABLE IF NOT EXISTS cube(
-    id SERIAL PRIMARY KEY,
-    owner_id INT REFERENCES user_profile(user_id) ON DELETE CASCADE,
+    id TEXT PRIMARY KEY,
+    owner_id TEXT REFERENCES user_profile(user_id) ON DELETE CASCADE,
     position_x INT NOT NULL,
     position_y INT NOT NULL,
     position_z INT NOT NULL,
